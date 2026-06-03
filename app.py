@@ -36,6 +36,32 @@ ANALYSIS_PROMPT = """請仔細分析這些影片畫面，找出其中出現的�
 IR_HINT = "\n\n注意：這些是紅外線夜視影像，已套用 CLAHE 對比增強與假彩色處理。"
 BG_HINT = "\n\n注意：畫面中的【綠色方框】是系統透過背景減法自動標示的移動前景區域，可能是動物所在位置，請優先分析這些區域。"
 
+
+def build_prompt(ir_mode: bool, has_bg: bool, location: str, species_hint: str) -> str:
+    """組合完整 prompt，注入地點與物種情境"""
+    parts = []
+
+    # 地點情境
+    if location.strip():
+        parts.append(f"【拍攝地點】{location.strip()}")
+
+    # 物種候選清單
+    if species_hint.strip():
+        parts.append(
+            f"【該地區可能出現的物種】{species_hint.strip()}\n"
+            "請優先對照上述物種清單進行辨識，若畫面模糊或特徵不明確，"
+            "請根據地點、體型、行為推測最可能的物種並說明理由。"
+        )
+
+    context = "\n".join(parts)
+    prompt = (f"{context}\n\n" if context else "") + ANALYSIS_PROMPT
+
+    if ir_mode:
+        prompt += IR_HINT
+    if has_bg:
+        prompt += BG_HINT
+    return prompt
+
 MAX_FRAMES = 24
 FRAME_INTERVAL_SEC = 2.0
 MIN_CONTOUR_AREA = 800   # 小於此面積的輪廓視為雜訊忽略
@@ -131,7 +157,8 @@ def extract_frames(
 
 # ── 分析邏輯 ────────────────────────────────────────────────
 
-def analyze_video(video_path, api_key: str, ir_mode: bool, bg_video_path) -> str:
+def analyze_video(video_path, api_key: str, ir_mode: bool, bg_video_path,
+                  location: str = "", species_hint: str = "") -> str:
     # Gradio 6 有時回傳 dict
     if isinstance(video_path, dict):
         video_path = video_path.get("video", video_path.get("name", ""))
@@ -161,11 +188,7 @@ def analyze_video(video_path, api_key: str, ir_mode: bool, bg_video_path) -> str
         if not frames_b64:
             return "無法讀取影片，請確認格式"
 
-        prompt = ANALYSIS_PROMPT
-        if ir_mode:
-            prompt += IR_HINT
-        if subtractor is not None:
-            prompt += BG_HINT
+        prompt = build_prompt(ir_mode, subtractor is not None, location, species_hint)
 
         parts = [types.Part(text=prompt)]
         for fb64 in frames_b64:
@@ -196,9 +219,10 @@ def analyze_video(video_path, api_key: str, ir_mode: bool, bg_video_path) -> str
                 video_file = client.files.get(name=video_file.name)
             if video_file.state.name == "FAILED":
                 return "影片處理失敗，請確認格式"
+            normal_prompt = build_prompt(False, False, location, species_hint)
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=[video_file, ANALYSIS_PROMPT],
+                contents=[video_file, normal_prompt],
                 config=types.GenerateContentConfig(temperature=0),
             )
             return response.text
@@ -237,6 +261,15 @@ def build_ui() -> gr.Blocks:
                     sources=["upload"],
                 )
 
+                location_input = gr.Textbox(
+                    label="📍 拍攝地點（選填）",
+                    placeholder="例：台灣南投縣蓮花池、非洲肯亞馬賽馬拉",
+                )
+                species_input = gr.Textbox(
+                    label="🐾 可能出現的物種（選填）",
+                    placeholder="例：台灣黑熊、山羌、石虎、藍腹鷴",
+                    lines=2,
+                )
                 ir_checkbox = gr.Checkbox(
                     label="🌡️ 紅外線 / 夜視模式",
                     value=False,
@@ -263,7 +296,8 @@ def build_ui() -> gr.Blocks:
 
         analyze_btn.click(
             fn=analyze_video,
-            inputs=[video_input, api_key_input, ir_checkbox, bg_video_input],
+            inputs=[video_input, api_key_input, ir_checkbox, bg_video_input,
+                    location_input, species_input],
             outputs=result_output,
         )
 
