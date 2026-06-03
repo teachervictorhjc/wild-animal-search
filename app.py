@@ -93,7 +93,10 @@ def extract_frames(video_path: str, ir_mode: bool) -> list[str]:
 
 # ── 分析邏輯 ────────────────────────────────────────────────
 
-def analyze_video(video_path: str, api_key: str, ir_mode: bool) -> str:
+def analyze_video(video_path, api_key: str, ir_mode: bool) -> str:
+    # Gradio 6 有時回傳 dict，取出實際路徑
+    if isinstance(video_path, dict):
+        video_path = video_path.get("video", video_path.get("name", ""))
     if not video_path:
         return "請先上傳一段影片"
 
@@ -110,11 +113,13 @@ def analyze_video(video_path: str, api_key: str, ir_mode: bool) -> str:
             return "無法讀取影片，請確認格式"
 
         prompt = ANALYSIS_PROMPT + IR_HINT
-        parts = [types.Part.from_text(prompt)]
+        parts = [types.Part(text=prompt)]
         for fb64 in frames_b64:
-            parts.append(types.Part.from_bytes(
-                data=base64.b64decode(fb64),
-                mime_type="image/jpeg",
+            parts.append(types.Part(
+                inline_data=types.Blob(
+                    mime_type="image/jpeg",
+                    data=base64.b64decode(fb64),
+                )
             ))
 
         try:
