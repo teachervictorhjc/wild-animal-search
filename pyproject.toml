@@ -1,11 +1,11 @@
 [project]
 name = "wild-animal-search"
 version = "0.1.0"
-description = "野生動物偵測 - 使用 Gemini AI 分析影片中的野生動物"
+description = "野生動物偵測 - 使用 GPT-4o 分析影片中的野生動物"
 requires-python = ">=3.10"
 dependencies = [
-    "gradio>=4.44.0",
-    "google-genai>=1.0.0",
+    "gradio>=5.0.0",
+    "openai>=1.30.0",
+    "opencv-python-headless>=4.8.0",
     "python-dotenv>=1.0.0",
 ]
-

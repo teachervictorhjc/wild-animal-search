@@ -8,7 +8,7 @@ sdk_version: 5.29.0
 app_file: app.py
 pinned: false
 license: mit
-short_description: 上傳影片，AI 自動辨識其中出現的野生動物
+short_description: 上傳影片，GPT-4o 自動辨識其中出現的野生動物
 ---
 
 # 野生動物偵測器 🦁
